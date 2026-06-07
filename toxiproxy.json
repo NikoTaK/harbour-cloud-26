@@ -1,8 +1,8 @@
 [
   {
-    "name": "payment-processor",
+    "name": "spring-boot-app",
     "listen": "0.0.0.0:9091",
-    "upstream": "payment-processor:8080",
+    "upstream": "host.docker.internal:8080",
     "enabled": true,
     "toxics": []
   }
