@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StarHarbour — Store Transactions</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    header h1 span { color: #58a6ff; }
+
+    header p {
+      color: #8b949e;
+      margin-top: 0.4rem;
+      font-size: 0.95rem;
+    }
+
+    .search-bar {
+      display: flex;
+      gap: 0.75rem;
+      max-width: 520px;
+      margin: 0 auto 2rem;
+    }
+
+    .search-bar input {
+      flex: 1;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      color: #e6edf3;
+      font-size: 0.95rem;
+      padding: 0.65rem 1rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .search-bar input:focus { border-color: #58a6ff; }
+    .search-bar input::placeholder { color: #484f58; }
+
+    .search-bar button {
+      background: #238636;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 0.65rem 1.25rem;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    .search-bar button:hover { background: #2ea043; }
+    .search-bar button:disabled { background: #21262d; color: #484f58; cursor: default; }
+
+    .status {
+      text-align: center;
+      color: #8b949e;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+      min-height: 1.2rem;
+    }
+
+    .status.error { color: #f85149; }
+
+    .table-wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid #30363d;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+
+    thead {
+      background: #161b22;
+    }
+
+    thead th {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-weight: 600;
+      color: #8b949e;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid #30363d;
+    }
+
+    tbody tr { border-bottom: 1px solid #21262d; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #161b22; }
+
+    tbody td {
+      padding: 0.75rem 1rem;
+      vertical-align: middle;
+    }
+
+    .badge {
+      display: inline-block;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+    }
+
+    .badge-coffee {
+      background: #3d2b1f;
+      color: #d4a574;
+    }
+
+    .badge-currency {
+      background: #1a2d1a;
+      color: #56d364;
+    }
+
+    .mono { font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.8rem; color: #8b949e; }
+
+    .price { font-weight: 700; color: #e6edf3; }
+
+    .empty {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #484f58;
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Star<span>Harbour</span></h1>
+  <p>Coffee chain store transaction viewer</p>
+</header>
+
+<div class="search-bar">
+  <input id="storeInput" type="text" placeholder="Enter Store ID (e.g. store-london-01)" />
+  <button id="loadBtn">Load</button>
+</div>
+
+<div id="status" class="status"></div>
+
+<div class="table-wrap" id="tableWrap" style="display:none">
+  <table>
+    <thead>
+      <tr>
+        <th>Payment ID</th>
+        <th>Coffee</th>
+        <th>Price</th>
+        <th>Loyalty Card</th>
+        <th>Registered At</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<script>
+  const input   = document.getElementById('storeInput');
+  const btn     = document.getElementById('loadBtn');
+  const status  = document.getElementById('status');
+  const wrap    = document.getElementById('tableWrap');
+  const tbody   = document.getElementById('tableBody');
+
+  function formatDate(iso) {
+    return new Date(iso).toLocaleString(undefined, {
+      dateStyle: 'medium', timeStyle: 'short'
+    });
+  }
+
+  function coffeeLabel(raw) {
+    return raw.replace(/_/g, ' ')
+              .toLowerCase()
+              .replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  async function load() {
+    const storeId = input.value.trim();
+    if (!storeId) { input.focus(); return; }
+
+    btn.disabled = true;
+    status.className = 'status';
+    status.textContent = 'Loading…';
+    wrap.style.display = 'none';
+    tbody.innerHTML = '';
+
+    try {
+      const res = await fetch(`/api/v1/payments?storeId=${encodeURIComponent(storeId)}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `HTTP ${res.status}`);
+      }
+      const payments = await res.json();
+
+      status.textContent = `${payments.length} transaction${payments.length !== 1 ? 's' : ''} for "${storeId}"`;
+
+      if (payments.length === 0) {
+        wrap.style.display = 'block';
+        tbody.innerHTML = `<tr><td colspan="5" class="empty">No transactions found for this store.</td></tr>`;
+      } else {
+        tbody.innerHTML = payments.map(p => `
+          <tr>
+            <td class="mono">${p.paymentId}</td>
+            <td><span class="badge badge-coffee">${coffeeLabel(p.coffeeType)}</span></td>
+            <td class="price">${p.price} <span class="badge badge-currency">${p.currency}</span></td>
+            <td class="mono">${p.loyaltyCardId}</td>
+            <td>${formatDate(p.registeredAt)}</td>
+          </tr>`).join('');
+        wrap.style.display = 'block';
+      }
+    } catch (err) {
+      status.className = 'status error';
+      status.textContent = `Error: ${err.message}`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  btn.addEventListener('click', load);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') load(); });
+</script>
+
+</body>
+</html>
