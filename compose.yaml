@@ -1,4 +1,35 @@
 services:
+  # Two payment shards. Bulk requests (and their items) are routed to one of
+  # these by hash(bulkRequestId) % shardCount. Add another postgres-N service
+  # plus a matching app.sharding.datasource.N entry to grow the cluster.
+  postgres-0:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: harbour
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d harbour"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  postgres-1:
+    image: postgres:16-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: harbour
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d harbour"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
   toxiproxy:
     image: ghcr.io/shopify/toxiproxy:latest
     ports:
